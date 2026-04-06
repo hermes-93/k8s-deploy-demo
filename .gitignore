@@ -1,0 +1,11 @@
+# Helm
+charts/*/charts/
+*.tgz
+
+# Rendered output
+rendered/
+
+# Editor
+.idea/
+.vscode/
+*.swp

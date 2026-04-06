@@ -1,0 +1,24 @@
+# Staging environment overrides
+replicaCount: 2
+
+image:
+  tag: "1.0.1"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: staging.cicd-pipeline-demo.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+env:
+  APP_ENV: staging
+  LOG_LEVEL: INFO

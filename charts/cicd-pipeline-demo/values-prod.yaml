@@ -1,0 +1,38 @@
+# Production environment overrides
+replicaCount: 3
+
+image:
+  tag: "1.0.1"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: cicd-pipeline-demo.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: cicd-pipeline-demo-tls
+      hosts:
+        - cicd-pipeline-demo.example.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+env:
+  APP_ENV: production
+  LOG_LEVEL: WARNING

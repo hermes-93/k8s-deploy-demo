@@ -1,0 +1,21 @@
+# Development environment overrides
+replicaCount: 1
+
+image:
+  tag: "latest"
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 64Mi
+  requests:
+    cpu: 25m
+    memory: 32Mi
+
+autoscaling:
+  enabled: false
+
+env:
+  APP_ENV: development
+  LOG_LEVEL: DEBUG
+  SERVICE_VERSION: "latest"

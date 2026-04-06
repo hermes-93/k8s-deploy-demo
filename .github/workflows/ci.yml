@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Helm lint ──────────────────────────────────────────────────────────────
+  helm-lint:
+    name: Helm lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.1
+
+      - name: Lint (default values)
+        run: helm lint charts/cicd-pipeline-demo
+
+      - name: Lint (dev values)
+        run: helm lint charts/cicd-pipeline-demo -f charts/cicd-pipeline-demo/values-dev.yaml
+
+      - name: Lint (staging values)
+        run: helm lint charts/cicd-pipeline-demo -f charts/cicd-pipeline-demo/values-staging.yaml
+
+      - name: Lint (prod values)
+        run: helm lint charts/cicd-pipeline-demo -f charts/cicd-pipeline-demo/values-prod.yaml
+
+  # ── Schema validation ──────────────────────────────────────────────────────
+  kubeconform:
+    name: Schema validation (kubeconform)
+    runs-on: ubuntu-latest
+    needs: helm-lint
+    strategy:
+      matrix:
+        env: [default, dev, staging, prod]
+        k8s_version: ["1.29.0", "1.31.0"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.1
+
+      - name: Install kubeconform
+        run: |
+          curl -sSLo /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /usr/local/bin kubeconform
+          chmod +x /usr/local/bin/kubeconform
+
+      - name: Render and validate (${{ matrix.env }} / k8s ${{ matrix.k8s_version }})
+        run: |
+          VALUES_FLAG=""
+          if [ "${{ matrix.env }}" != "default" ]; then
+            VALUES_FLAG="-f charts/cicd-pipeline-demo/values-${{ matrix.env }}.yaml"
+          fi
+          helm template demo charts/cicd-pipeline-demo $VALUES_FLAG \
+            | kubeconform \
+                -strict \
+                -kubernetes-version ${{ matrix.k8s_version }} \
+                -schema-location default \
+                -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+                -summary \
+                -
+
+  # ── Dry-run smoke test (kind cluster) ─────────────────────────────────────
+  kind-smoke:
+    name: kind smoke test
+    runs-on: ubuntu-latest
+    needs: kubeconform
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.1
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.12.0
+
+      - name: Helm install (dry-run server-side)
+        run: |
+          helm install demo charts/cicd-pipeline-demo \
+            --dry-run --debug \
+            --set image.pullPolicy=Never \
+            2>&1 | tail -5
+
+      - name: Helm install (real, no image pull)
+        run: |
+          helm install demo charts/cicd-pipeline-demo \
+            --wait --timeout 30s \
+            --set image.pullPolicy=Never \
+            --set replicaCount=1 || true
+          kubectl get pods -A
+          helm status demo

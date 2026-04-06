@@ -1,0 +1,21 @@
+apiVersion: v2
+name: cicd-pipeline-demo
+description: >
+  Helm chart for cicd-pipeline-demo — a FastAPI service with health probes,
+  horizontal pod autoscaling, and configurable multi-environment values.
+type: application
+version: 0.1.0
+appVersion: "1.0.1"
+
+keywords:
+  - fastapi
+  - python
+  - rest-api
+
+home: https://github.com/hermes-93/cicd-pipeline-demo
+sources:
+  - https://github.com/hermes-93/cicd-pipeline-demo
+
+maintainers:
+  - name: hermes-93
+    url: https://github.com/hermes-93
