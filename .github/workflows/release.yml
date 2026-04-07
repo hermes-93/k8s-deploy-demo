@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "chart-v[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  release:
+    name: Package & publish Helm chart
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write    # create GitHub release
+      packages: write    # push to GHCR OCI
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.1
+
+      - name: Extract chart version from tag
+        id: version
+        run: |
+          # tag format: chart-v0.2.0  →  version: 0.2.0
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#chart-v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Chart version: $VERSION"
+
+      - name: Lint before packaging
+        run: helm lint charts/cicd-pipeline-demo
+
+      - name: Package chart
+        run: |
+          helm package charts/cicd-pipeline-demo \
+            --version ${{ steps.version.outputs.version }} \
+            --destination /tmp/chart-pkg
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push chart to OCI registry
+        run: |
+          helm push \
+            /tmp/chart-pkg/cicd-pipeline-demo-${{ steps.version.outputs.version }}.tgz \
+            oci://ghcr.io/${{ github.repository_owner }}/charts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "chart-v${{ steps.version.outputs.version }}"
+          body: |
+            ## Helm chart v${{ steps.version.outputs.version }}
+
+            ### Install from OCI registry
+
+            ```bash
+            helm install demo \
+              oci://ghcr.io/${{ github.repository_owner }}/charts/cicd-pipeline-demo \
+              --version ${{ steps.version.outputs.version }} \
+              --namespace prod --create-namespace
+            ```
+
+            ### Or download the tarball below and install locally
+
+            ```bash
+            helm install demo cicd-pipeline-demo-${{ steps.version.outputs.version }}.tgz \
+              -f values-prod.yaml --namespace prod --create-namespace
+            ```
+          files: /tmp/chart-pkg/*.tgz
+          generate_release_notes: true

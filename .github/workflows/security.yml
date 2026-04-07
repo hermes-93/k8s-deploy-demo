@@ -1,0 +1,76 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 8 * * 1"   # weekly on Monday
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Checkov — CIS Kubernetes benchmark ────────────────────────────────────
+  checkov:
+    name: Checkov (CIS K8s)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.1
+
+      - name: Render chart (default values)
+        run: |
+          helm template demo charts/cicd-pipeline-demo \
+            > /tmp/rendered-default.yaml
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: /tmp/rendered-default.yaml
+          framework: kubernetes
+          # Skip checks that don't apply to a demo portfolio app
+          skip_check: CKV_K8S_8,CKV_K8S_9,CKV_K8S_28,CKV_K8S_30
+          soft_fail: false
+          output_format: cli
+
+  # ── Trivy — manifest misconfiguration scan ────────────────────────────────
+  trivy:
+    name: Trivy config scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.1
+
+      - name: Render chart
+        run: |
+          helm template demo charts/cicd-pipeline-demo \
+            > /tmp/rendered.yaml
+
+      - name: Run Trivy config scan
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: config
+          scan-ref: charts/cicd-pipeline-demo
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: "0"   # report only, do not block
+
+      - name: Upload results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-helm
