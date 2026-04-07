@@ -14,18 +14,18 @@ A production-ready Helm chart that deploys [cicd-pipeline-demo](https://github.c
 ## Kubernetes resource topology
 
 ```
-                    ┌─────────────────────────────────────┐
-                    │           Kubernetes Cluster         │
-                    │                                      │
-  External ──► Ingress ──► Service ──► Deployment         │
-  Traffic      (optional)  (ClusterIP)    │                │
-                    │                     ├── Pod          │
-                    │    HPA ─────────────┤   ├─ container │
-                    │  (optional)         └── Pod          │
-                    │                         │            │
-                    │  ConfigMap ─────────────┘            │
-                    │  ServiceAccount ────────┘            │
-                    └─────────────────────────────────────┘
+                    ┌───────────────────────────────────────┐
+                    │           Kubernetes Cluster          │
+                    │                                       │
+  External ──► Ingress ──► Service ──► Deployment           │
+  Traffic      (optional)  (ClusterIP)    │                 │
+                    │                     ├── Pod           │
+                    │    HPA ─────────────┤   ├─ container  │
+                    │  (optional)         └── Pod           │
+                    │                         │             │
+                    │  ConfigMap ─────────────┘             │
+                    │  ServiceAccount ────────┘             │
+                    └───────────────────────────────────────┘
 ```
 
 ### Resource summary
@@ -115,28 +115,28 @@ helm install demo oci://ghcr.io/hermes-93/charts/cicd-pipeline-demo \
 
 ## Environment comparison
 
-| Feature | dev | staging | prod |
-|---------|-----|---------|------|
-| Replicas | 1 | 2 | 3 |
-| HPA | ✗ | ✓ (2–4) | ✓ (3–10) |
-| Ingress | ✗ | ✓ | ✓ + TLS |
-| Log level | DEBUG | INFO | WARNING |
-| CPU limit | 100m | 200m | 500m |
-| Memory limit | 64Mi | 128Mi | 256Mi |
+| Feature      |  dev  | staging  |    prod    |
+|--------------|-------|----------|------------|
+| Replicas     |   1   |   2      |     3      |
+| HPA          |  ✗✗  |   2-4    |    3–10    |
+| Ingress      |  ✗✗  |    yes   | yes, + TLS |
+| Log level    | DEBUG |   INFO   |   WARNING  |
+| CPU limit    | 100m  |   200m   |    500m    |
+| Memory limit | 64Mi  |   128Mi  |    256Mi   |
 
 ---
 
 ## Key design decisions
 
 | Decision | Reason |
-|----------|--------|
-| `readOnlyRootFilesystem: true` | Immutable container FS — prevents runtime tampering |
-| `runAsNonRoot: true` | Follows least-privilege principle |
-| Drop ALL capabilities | Minimal attack surface |
-| `checksum/config` annotation | Pods auto-restart on ConfigMap change — no manual rollout |
+|--------------------------------------|--------------------------------------------------------------------------------|
+| `readOnlyRootFilesystem: true`       |  Immutable container FS — prevents runtime tampering                           |
+| `runAsNonRoot: true`                 | Follows least-privilege principle                                              |
+| Drop ALL capabilities                | Minimal attack surface                                                         |
+| `checksum/config` annotation         | Pods auto-restart on ConfigMap change — no manual rollout                      |
 | Separate liveness / readiness probes | Liveness (`/health/live`) is cheap; readiness (`/health`) validates full state |
-| HPA CPU threshold 60–70% | Headroom before saturation; avoids premature scale-down |
-| `autoscaling/v2` HPA | Supports multiple metrics (CPU + memory + custom) |
+| HPA CPU threshold 60–70%             | Headroom before saturation; avoids premature scale-down                        |
+| `autoscaling/v2` HPA                 | Supports multiple metrics (CPU + memory + custom)                              |
 
 ---
 
